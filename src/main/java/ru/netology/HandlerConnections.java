@@ -13,28 +13,27 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-public class Handler implements Runnable {
-    private final Socket socket;
+public class HandlerConnections implements Runnable {
+    private Socket socket;
     static final List<String> validPaths = List.of("/index.html", "/spring.svg", "/spring.png", "/resources.html", "/styles.css", "/app.js", "/links.html", "/forms.html", "/classic.html", "/events.html", "/events.js");
     final static int poolSize = 64;
     static final ExecutorService threadPool = Executors.newFixedThreadPool(poolSize);
 
-    Handler(Socket socket) {
+    HandlerConnections(Socket socket) {
         this.socket = socket;
     }
 
+    @Override
     public void run() {
         try (final var in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
              final var out = new BufferedOutputStream(socket.getOutputStream())
         ) {
-            while (!socket.isClosed()) {
-                final var requestLine = in.readLine();
-                final var parts = requestLine.split(" ");
-                if (checkSize(parts) || checkValidParts(parts[1], out) || specialCaseForClassic(parts[1], out)) {
-                    continue;
-                }
-                endOfProcessing(parts[1], out);
+            final var requestLine = in.readLine();
+            final var parts = requestLine.split(" ");
+            if (checkSize(parts) || checkValidParts(parts[1], out) || specialCaseForClassic(parts[1], out)) {
+                return;
             }
+            endOfProcessing(parts[1], out);
         } catch (IOException e) {
             shutdownAndAwaitTermination();
             e.printStackTrace();
@@ -42,15 +41,15 @@ public class Handler implements Runnable {
     }
 
     void shutdownAndAwaitTermination() {
-        Handler.threadPool.shutdown();
+        HandlerConnections.threadPool.shutdown();
         try {
-            if (!Handler.threadPool.awaitTermination(60, TimeUnit.SECONDS)) {
-                Handler.threadPool.shutdownNow();
-                if (!Handler.threadPool.awaitTermination(60, TimeUnit.SECONDS))
+            if (!HandlerConnections.threadPool.awaitTermination(60, TimeUnit.SECONDS)) {
+                HandlerConnections.threadPool.shutdownNow();
+                if (!HandlerConnections.threadPool.awaitTermination(60, TimeUnit.SECONDS))
                     System.err.println("Pool did not terminate");
             }
         } catch (InterruptedException ie) {
-            Handler.threadPool.shutdownNow();
+            HandlerConnections.threadPool.shutdownNow();
             Thread.currentThread().interrupt();
         }
     }

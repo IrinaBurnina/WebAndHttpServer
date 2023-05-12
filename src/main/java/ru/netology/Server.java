@@ -10,15 +10,15 @@ public class Server {
         this.port = port;
     }
 
-    public void run() {
+    public void start() {
         try (final var serverSocket = new ServerSocket(port)) {
             while (!serverSocket.isClosed()) {
                 final var socket = serverSocket.accept();
-                Handler handler = new Handler(socket);
-                Handler.threadPool.execute(handler);
+                HandlerConnections handler = new HandlerConnections(socket);
+                HandlerConnections.threadPool.execute(handler);
             }
         } catch (IOException e) {
-            Handler.threadPool.shutdown();
+            HandlerConnections.threadPool.shutdown();
             e.printStackTrace();
         }
     }
