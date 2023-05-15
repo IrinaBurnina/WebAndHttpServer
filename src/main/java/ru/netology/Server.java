@@ -2,15 +2,16 @@ package ru.netology;
 
 import java.io.IOException;
 import java.net.ServerSocket;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class Server {
-    private final int port;
+    public static Map<String, Map<String, Handler>> handlers = new ConcurrentHashMap<>();
 
-    public Server(int port) {
-        this.port = port;
+    public Server() {
     }
 
-    public void start() {
+    public void listen(int port) {
         try (final var serverSocket = new ServerSocket(port)) {
             while (!serverSocket.isClosed()) {
                 final var socket = serverSocket.accept();
@@ -21,5 +22,12 @@ public class Server {
             HandlerConnections.threadPool.shutdown();
             e.printStackTrace();
         }
+    }
+
+    public void addHandler(String method, String path, Handler handler) {
+        Map<String, Handler> map = new ConcurrentHashMap<>();
+        map.put(path, handler);
+        handlers.put(method, map);
+        System.out.println("Метод обработки " + method + " добавлен.");
     }
 }

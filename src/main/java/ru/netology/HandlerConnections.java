@@ -14,9 +14,10 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 public class HandlerConnections implements Runnable {
-    private Socket socket;
+    private final Socket socket;
     static final List<String> validPaths = List.of("/index.html", "/spring.svg", "/spring.png", "/resources.html", "/styles.css", "/app.js", "/links.html", "/forms.html", "/classic.html", "/events.html", "/events.js");
     final static int poolSize = 64;
+
     static final ExecutorService threadPool = Executors.newFixedThreadPool(poolSize);
 
     HandlerConnections(Socket socket) {
@@ -30,6 +31,12 @@ public class HandlerConnections implements Runnable {
         ) {
             final var requestLine = in.readLine();
             final var parts = requestLine.split(" ");
+            final var method = parts[0];
+            final var path = parts[1];
+            final var body = parts[2];
+            Request request = new Request(method, path, body);
+            handlersRun(out, request);
+            bodyOfRequest(requestLine);
             if (checkSize(parts) || checkValidParts(parts[1], out) || specialCaseForClassic(parts[1], out)) {
                 return;
             }
@@ -37,6 +44,25 @@ public class HandlerConnections implements Runnable {
         } catch (IOException e) {
             shutdownAndAwaitTermination();
             e.printStackTrace();
+        }
+    }
+
+    public static void handlersRun(BufferedOutputStream out, Request request) {
+        for (String methodName : Server.handlers.keySet()) {
+            if (methodName.equals(request.method)) {
+                for (String pathName : Server.handlers.get(methodName).keySet()) {
+                    if (pathName.equals(request.requestHeader)) {
+                        Server.handlers.get(methodName).get(pathName).handle(request, out);
+                    }
+                }
+            }
+        }
+    }
+
+    public static void bodyOfRequest(String requestLine) {
+        final var parts = requestLine.split("\r\n");
+        if (parts.length - 2 == 0) {
+            System.out.println("Тело запроса = " + parts[parts.length - 1]);
         }
     }
 
@@ -59,9 +85,8 @@ public class HandlerConnections implements Runnable {
     }
 
     public static boolean checkValidParts(String path, BufferedOutputStream out) throws IOException {
-        if (!validPaths.contains(path)) { //если список допустимых файлов не содержит тот,
-            // что только что поступил в запросе, то буфер вернет 404
-            out.write((                   //затем закроет ресурсы и вернет в начало цикла
+        if (!validPaths.contains(path)) {
+            out.write((
                     "HTTP/1.1 404 Not Found\r\n" +
                             "Content-Length: 0\r\n" +
                             "Connection: close\r\n" +
@@ -98,14 +123,14 @@ public class HandlerConnections implements Runnable {
 
     public static void endOfProcessing(String path, BufferedOutputStream out) throws IOException {
         final var filePath = Path.of(".", "public", path);
-        out.write(( //выводим 200 + тип файла +длину пути= всё в виде массива байт
+        out.write((
                 "HTTP/1.1 200 OK\r\n" +
-                        "Content-Type: " + Files.probeContentType(filePath) + "\r\n" +//записываем тип файла, чтобы правильно его открыть с помощью соответствующего приложения
-                        "Content-Length: " + Files.size(filePath) + "\r\n" +  // записываем размер полного пути к файлу
+                        "Content-Type: " + Files.probeContentType(filePath) + "\r\n" +
+                        "Content-Length: " + Files.size(filePath) + "\r\n" +
                         "Connection: close\r\n" +
                         "\r\n"
         ).getBytes());
-        Files.copy(filePath, out); //копируем файл, находящийся по адресу файлпафь  в буфер (выходную папку) и закрываем
+        Files.copy(filePath, out);
         out.flush();
     }
 }
