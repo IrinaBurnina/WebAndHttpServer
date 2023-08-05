@@ -12,8 +12,7 @@ import java.util.concurrent.Executors;
 public class Server {
 
     private final ExecutorService executorService;
-    private final Map<String, Map<String, Handler>> handlers;// (метод, (путь, обработка))
-
+    private final Map<String, Map<String, Handler>> handlers;
     public Server(int poolSize) {
         this.executorService = Executors.newFixedThreadPool(poolSize);
         handlers = new ConcurrentHashMap<>();
@@ -52,11 +51,9 @@ public class Server {
                 badRequest(out);
             } else {
                 handlersRun(out, request);
-                System.out.println(request.getFullPath() + "- getfullpath");
-                System.out.println(request.queryParams + " - queryParams before parse");
+                System.out.println(request.getFullPath()[0] + "?" + request.getFullPath()[1] + "- getfullpath");
                 System.out.println(request.getQueryParams() + "  - getQueryParams");
                 System.out.println(request.getQueryParam("value") + "   - getQueryParam");
-
             }
         } catch (
                 IOException e) {
@@ -66,10 +63,10 @@ public class Server {
     }
 
     public void handlersRun(BufferedOutputStream out, Request request) throws IOException {
-        Map<String, Handler> map = handlers.get(request.requestLine.getMethod());//получаю по методу путь-обработка
-        String requestPath = request.getFullPath();      //будет ли этот путь полным?
+        Map<String, Handler> map = handlers.get(request.requestLine.getMethod());
+        String requestPath = request.getFullPath()[0];
         for (String path : map.keySet()) {
-            if (requestPath.contains(path)) {//если ключ из множества ключей содержит часть пути, то включить обработку****
+            if (requestPath.contains(path)) {
                 Handler handler = map.get(path);
                 handler.handle(request, out);
             }
@@ -95,5 +92,4 @@ public class Server {
                         "\r\n"
         ).getBytes());
     }
-
 }

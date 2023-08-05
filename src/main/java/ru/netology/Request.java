@@ -1,26 +1,26 @@
 package ru.netology;
 
-import org.apache.http.Consts;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.utils.URLEncodedUtils;
 
 import java.io.BufferedInputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 public class Request {
     public RequestLine requestLine;
     public List<String> headers;
-    public String queryParams;
+    public String body;
     public static final String GET = "GET";
     public static final String POST = "POST";
     public static final List<String> allowedMethods = List.of(GET, POST);
     List<NameValuePair> listQueryParams = new ArrayList<>();
 
-    public Request(RequestLine requestLine, List<String> headers, String queryParams) {
+    public Request(RequestLine requestLine, List<String> headers, String body) {
         this.requestLine = requestLine;
         this.headers = headers;
-        this.queryParams = queryParams;
+        this.body = body;
     }
 
     public static Request createRequest(BufferedInputStream in) throws IOException {
@@ -42,18 +42,14 @@ public class Request {
         if (requestLine.length != 3) {
             return null;
         }
-
         final var method = requestLine[0];
         if (!allowedMethods.contains(method)) {
             return null;
         }
-
         final var pathOfRequestLine = requestLine[1];
         if (!pathOfRequestLine.startsWith("/")) {
             return null;
         }
-
-
 // ищем заголовки
         final var headersDelimiter = new byte[]{'\r', '\n', '\r', '\n'};
         final var headersStart = requestLineEnd + requestLineDelimiter.length;
@@ -69,19 +65,19 @@ public class Request {
         final var headersBytes = in.readNBytes(headersEnd - headersStart);
         final var headers = Arrays.asList(new String(headersBytes).split("\r\n"));
 // для GET тела нет
-        String queryParams = null;
+        String bodyWithParams = null;
         if (!method.equals(GET)) {
             in.skip(headersDelimiter.length);
-// вычитываем Content-Length, чтобы прочитать queryParams
+// вычитываем Content-Length, чтобы прочитать body
             final var contentLength = extractHeader(headers, "Content-Length");
             if (contentLength.isPresent()) {
                 final var length = Integer.parseInt(contentLength.get());
                 final var bodyBytes = in.readNBytes(length);
-                queryParams = new String(bodyBytes);
+                bodyWithParams = new String(bodyBytes);
 
             }
         }
-        return new Request(new RequestLine(requestLine[0], requestLine[1], requestLine[2]), headers, queryParams);
+        return new Request(new RequestLine(requestLine[0], requestLine[1], requestLine[2]), headers, bodyWithParams);
     }
 
     private static Optional<String> extractHeader(List<String> headers, String header) {
@@ -105,16 +101,14 @@ public class Request {
         return -1;
     }
 
-    public String getFullPath() {
-        //return String.valueOf(extractHeader(headers, "Referer"));
-        String[] getFullPathFor = this.requestLine.getPathToResource().split("\\?");
-        return getFullPathFor[0];
+    String[] getFullPath() {
+        return this.requestLine.getPathToResource().split("\\?");
     }
 
-    public List<NameValuePair> getQueryParam(String name) {
+    public List<NameValuePair> getQueryParam(String query) {
         List<NameValuePair> list = new ArrayList<>();
         for (NameValuePair nameValue : listQueryParams) {
-            if (name.equals(nameValue.getName())) {
+            if (query.equals(nameValue.getName())) {
                 list.add(nameValue);
             }
         }
@@ -122,7 +116,7 @@ public class Request {
     }
 
     public List<NameValuePair> getQueryParams() {
-        listQueryParams = URLEncodedUtils.parse(this.queryParams, Consts.UTF_8);
+        listQueryParams = URLEncodedUtils.parse(getFullPath()[1], StandardCharsets.UTF_8);
         return listQueryParams;
     }
 
@@ -133,7 +127,7 @@ public class Request {
                 ", requestPath=" + requestLine.getPathToResource() +
                 ", requestVersion=" + requestLine.getVersionOfProtocol() +
                 ", headers=" + headers +
-                ", queryParams='" + queryParams + '\'' +
+                ", queryParams='" + body + '\'' +
                 '}';
     }
 }
