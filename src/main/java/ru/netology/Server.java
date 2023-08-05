@@ -54,6 +54,10 @@ public class Server {
                 System.out.println(request.getFullPath()[0] + "?" + request.getFullPath()[1] + "- getfullpath");
                 System.out.println(request.getQueryParams() + "  - getQueryParams");
                 System.out.println(request.getQueryParam("value") + "   - getQueryParam");
+                System.out.println(request.body + "-body of request");
+                System.out.println(request.getPostParam("value") + "  -getPostParam");
+                System.out.println(request.getPostParams() + " - getPostParams");
+
             }
         } catch (
                 IOException e) {

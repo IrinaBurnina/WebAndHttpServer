@@ -16,6 +16,7 @@ public class Request {
     public static final String POST = "POST";
     public static final List<String> allowedMethods = List.of(GET, POST);
     List<NameValuePair> listQueryParams = new ArrayList<>();
+    List<NameValuePair> listPostParams = new ArrayList<>();
 
     public Request(RequestLine requestLine, List<String> headers, String body) {
         this.requestLine = requestLine;
@@ -118,6 +119,24 @@ public class Request {
     public List<NameValuePair> getQueryParams() {
         listQueryParams = URLEncodedUtils.parse(getFullPath()[1], StandardCharsets.UTF_8);
         return listQueryParams;
+    }
+
+    public List<NameValuePair> getPostParam(String body) {
+        List<NameValuePair> list = new ArrayList<>();
+        for (NameValuePair nameValue : listPostParams) {
+            if (body.equals(nameValue.getName())) {
+                list.add(nameValue);
+            }
+        }
+        return list;
+    }
+
+    public List<NameValuePair> getPostParams() {
+        if (this.requestLine.getMethod().equals("POST") && body != null) {
+            listPostParams = URLEncodedUtils.parse(body, StandardCharsets.UTF_8);
+            return listPostParams;
+        }
+        return null;
     }
 
     @Override
