@@ -16,6 +16,7 @@ public class Request {
     private static final String POST = "POST";
     private static final List<String> allowedMethods = List.of(GET, POST);
     private static List<NameValuePair> queryParams = new ArrayList<>();
+    private static List<NameValuePair> postParams = new ArrayList<>();
     private static String[] fullPath = new String[2];
 
     public Request(RequestLine requestLine, List<String> headers, List<NameValuePair> body) {
@@ -66,7 +67,9 @@ public class Request {
         final var headersBytes = in.readNBytes(headersEnd - headersStart);
         final var headers = Arrays.asList(new String(headersBytes).split("\r\n"));
 // для GET тела нет
-        String bodyWithParams = null;
+        String bodyWithParams;
+        RequestLine lineOfRequest = new RequestLine(requestLine[0], requestLine[1], requestLine[2]);
+        fullPath = lineOfRequest.getPathToResource().split("\\?");
         if (!method.equals(GET)) {
             in.skip(headersDelimiter.length);
 // вычитываем Content-Length, чтобы прочитать body
@@ -75,11 +78,11 @@ public class Request {
                 final var length = Integer.parseInt(contentLength.get());
                 final var bodyBytes = in.readNBytes(length);
                 bodyWithParams = new String(bodyBytes);
-
+                postParams = URLEncodedUtils.parse(bodyWithParams, StandardCharsets.UTF_8);
+                return new Request(lineOfRequest, headers, postParams);
             }
         }
-        RequestLine lineOfRequest = new RequestLine(requestLine[0], requestLine[1], requestLine[2]);
-        fullPath = lineOfRequest.getPathToResource().split("\\?");
+
         queryParams = URLEncodedUtils.parse(fullPath[1], StandardCharsets.UTF_8);
         return new Request(lineOfRequest, headers, queryParams);
     }
@@ -109,10 +112,10 @@ public class Request {
         return fullPath;
     }
 
-    public List<NameValuePair> getQueryParam(String query) {
+    private List<NameValuePair> getParam(String name, List<NameValuePair> queryParams) {
         List<NameValuePair> list = new ArrayList<>();
         for (NameValuePair nameValue : queryParams) {
-            if (query.equals(nameValue.getName())) {
+            if (name.equals(nameValue.getName())) {
                 list.add(nameValue);
             }
         }
@@ -121,6 +124,22 @@ public class Request {
 
     public List<NameValuePair> getQueryParams() {
         return queryParams;
+    }
+
+    public List<NameValuePair> getPostParams() {
+        return postParams;
+    }
+
+    public List<NameValuePair> getQueryParam(String name) {
+        return getParam(name, queryParams);
+    }
+
+    public List<NameValuePair> getPostParam(String name) {
+        return getParam(name, postParams);
+    }
+
+    public List<NameValuePair> getBody() {
+        return body;
     }
 
     @Override
