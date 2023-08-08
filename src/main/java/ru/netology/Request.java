@@ -9,16 +9,16 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 public class Request {
-    public RequestLine requestLine;
-    public List<String> headers;
-    public String body;
-    public static final String GET = "GET";
-    public static final String POST = "POST";
-    public static final List<String> allowedMethods = List.of(GET, POST);
-    List<NameValuePair> listQueryParams = new ArrayList<>();
-    List<NameValuePair> listPostParams = new ArrayList<>();
+    protected final RequestLine requestLine;
+    private final List<String> headers;
+    private final List<NameValuePair> body;
+    private static final String GET = "GET";
+    private static final String POST = "POST";
+    private static final List<String> allowedMethods = List.of(GET, POST);
+    private static List<NameValuePair> queryParams = new ArrayList<>();
+    private static String[] fullPath = new String[2];
 
-    public Request(RequestLine requestLine, List<String> headers, String body) {
+    public Request(RequestLine requestLine, List<String> headers, List<NameValuePair> body) {
         this.requestLine = requestLine;
         this.headers = headers;
         this.body = body;
@@ -78,7 +78,10 @@ public class Request {
 
             }
         }
-        return new Request(new RequestLine(requestLine[0], requestLine[1], requestLine[2]), headers, bodyWithParams);
+        RequestLine lineOfRequest = new RequestLine(requestLine[0], requestLine[1], requestLine[2]);
+        fullPath = lineOfRequest.getPathToResource().split("\\?");
+        queryParams = URLEncodedUtils.parse(fullPath[1], StandardCharsets.UTF_8);
+        return new Request(lineOfRequest, headers, queryParams);
     }
 
     private static Optional<String> extractHeader(List<String> headers, String header) {
@@ -103,12 +106,12 @@ public class Request {
     }
 
     String[] getFullPath() {
-        return this.requestLine.getPathToResource().split("\\?");
+        return fullPath;
     }
 
     public List<NameValuePair> getQueryParam(String query) {
         List<NameValuePair> list = new ArrayList<>();
-        for (NameValuePair nameValue : listQueryParams) {
+        for (NameValuePair nameValue : queryParams) {
             if (query.equals(nameValue.getName())) {
                 list.add(nameValue);
             }
@@ -117,26 +120,7 @@ public class Request {
     }
 
     public List<NameValuePair> getQueryParams() {
-        listQueryParams = URLEncodedUtils.parse(getFullPath()[1], StandardCharsets.UTF_8);
-        return listQueryParams;
-    }
-
-    public List<NameValuePair> getPostParam(String body) {
-        List<NameValuePair> list = new ArrayList<>();
-        for (NameValuePair nameValue : listPostParams) {
-            if (body.equals(nameValue.getName())) {
-                list.add(nameValue);
-            }
-        }
-        return list;
-    }
-
-    public List<NameValuePair> getPostParams() {
-        if (this.requestLine.getMethod().equals("POST") && body != null) {
-            listPostParams = URLEncodedUtils.parse(body, StandardCharsets.UTF_8);
-            return listPostParams;
-        }
-        return null;
+        return queryParams;
     }
 
     @Override
