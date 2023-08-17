@@ -13,6 +13,7 @@ public class Server {
 
     private final ExecutorService executorService;
     private final Map<String, Map<String, Handler>> handlers;
+
     public Server(int poolSize) {
         this.executorService = Executors.newFixedThreadPool(poolSize);
         handlers = new ConcurrentHashMap<>();
@@ -47,16 +48,19 @@ public class Server {
              final var out = new BufferedOutputStream(socket.getOutputStream())
         ) {
             Request request = Request.createRequest(in);
-            if (request == null || !handlers.containsKey(request.requestLine.getMethod())) {
+            if (request == null) {
                 badRequest(out);
+            } else if (!handlers.containsKey(request.requestLine.getMethod())) {
+                resourceNotFound(out);
             } else {
                 handlersRun(out, request);
                 System.out.println(request.getFullPath()[0] + "?" + request.getFullPath()[1] + "- getfullpath");
                 System.out.println(request.getQueryParams() + "  - getQueryParams");
                 System.out.println(request.getQueryParam("value") + "   - getQueryParam");
-                System.out.println(request.getBody() + "-body of request");
                 System.out.println(request.getPostParam("value") + "  -getPostParam");
                 System.out.println(request.getPostParams() + " - getPostParams");
+                System.out.println(request.getPart("value") + "  -getPart");
+                System.out.println(request.getParts() + "  - getParts");
 
             }
         } catch (
@@ -81,6 +85,16 @@ public class Server {
     private static void badRequest(BufferedOutputStream out) throws IOException {
         out.write((
                 "HTTP/1.1 400 Bad Request\r\n" +
+                        "Content-Length: 0\r\n" +
+                        "Connection: close\r\n" +
+                        "\r\n"
+        ).getBytes());
+        out.flush();
+    }
+
+    private static void resourceNotFound(BufferedOutputStream out) throws IOException {
+        out.write((
+                "HTTP/1.1 404 Resource Not Found\r\n" +
                         "Content-Length: 0\r\n" +
                         "Connection: close\r\n" +
                         "\r\n"

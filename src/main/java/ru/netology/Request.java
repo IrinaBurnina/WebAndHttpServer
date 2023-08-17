@@ -1,28 +1,45 @@
 package ru.netology;
 
-import org.apache.http.NameValuePair;
+import org.apache.commons.fileupload.*;
+import org.apache.commons.fileupload.util.Streams;
+import org.apache.http.*;
 import org.apache.http.client.utils.URLEncodedUtils;
 
 import java.io.BufferedInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
-public class Request {
-    protected final RequestLine requestLine;
+public class Request implements UploadContext {
+    protected static RequestLine requestLine;
     private final List<String> headers;
     private final List<NameValuePair> body;
+    private final List<NameValuePair> query;
+    //    private static BufferedInputStream in;
     private static final String GET = "GET";
     private static final String POST = "POST";
     private static final List<String> allowedMethods = List.of(GET, POST);
     private static List<NameValuePair> queryParams = new ArrayList<>();
-    private static List<NameValuePair> postParams = new ArrayList<>();
+    private static List<NameValuePair> bodyParams = new ArrayList<>();
+    private static Map<String, List<PartImplFileItem>> multiParts = new HashMap<>();
     private static String[] fullPath = new String[2];
 
-    public Request(RequestLine requestLine, List<String> headers, List<NameValuePair> body) {
+    public Request(RequestLine requestLine, List<String> headers, List<NameValuePair> queryParams,
+                   List<NameValuePair> bodyParams, Map<String, List<PartImplFileItem>> multiParts) {
         this.requestLine = requestLine;
         this.headers = headers;
-        this.body = body;
+        this.query = queryParams;
+        this.body = bodyParams;
+        this.multiParts = multiParts;
+    }
+
+    public Request(RequestLine requestLine, List<String> headers, List<NameValuePair> queryParams) {
+        this(requestLine, headers, queryParams, null, null);
+    }
+
+    public Request(RequestLine requestLine, List<String> headers, List<NameValuePair> queryParams, List<NameValuePair> bodyParams) {
+        this(requestLine, headers, queryParams, bodyParams, null);
     }
 
     public static Request createRequest(BufferedInputStream in) throws IOException {
@@ -69,23 +86,69 @@ public class Request {
 // для GET тела нет
         String bodyWithParams;
         RequestLine lineOfRequest = new RequestLine(requestLine[0], requestLine[1], requestLine[2]);
-        fullPath = lineOfRequest.getPathToResource().split("\\?");
         if (!method.equals(GET)) {
             in.skip(headersDelimiter.length);
 // вычитываем Content-Length, чтобы прочитать body
             final var contentLength = extractHeader(headers, "Content-Length");
-            if (contentLength.isPresent()) {
+            final var contentType = extractHeader(headers, "Content-Type");
+            if (contentLength.isPresent()) { //если тело есть
                 final var length = Integer.parseInt(contentLength.get());
                 final var bodyBytes = in.readNBytes(length);
                 bodyWithParams = new String(bodyBytes);
-                postParams = URLEncodedUtils.parse(bodyWithParams, StandardCharsets.UTF_8);
-                return new Request(lineOfRequest, headers, postParams);
+                queryParams = parseQuery(lineOfRequest);
+                if (contentType != null) {
+                    if (contentType.get().startsWith("application/x-www-form-urlencoded")) {
+                        bodyParams = URLEncodedUtils.parse(bodyWithParams, StandardCharsets.UTF_8);
+                        return new Request(lineOfRequest, headers, queryParams, bodyParams);
+                    } else if (contentType.get().startsWith("multipart/form-data")) {
+                        RequestContext requestContext = new RequestContextImpl(new RequestImplHttpRequest(),
+                                contentType.get(), length, in);
+                        multiParts = parseBodyWithFiles(requestContext);
+                        return new Request(lineOfRequest, headers, queryParams, null, multiParts);
+                    }
+                    return new Request(lineOfRequest, headers, queryParams);
+                }
             }
         }
-
-        queryParams = URLEncodedUtils.parse(fullPath[1], StandardCharsets.UTF_8);
-        return new Request(lineOfRequest, headers, queryParams);
+        return new Request(lineOfRequest, headers, parseQuery(lineOfRequest));
     }
+
+    private static List<NameValuePair> parseQuery(RequestLine requestLine) {
+        fullPath = requestLine.getPathToResource().split("\\?");
+        queryParams = URLEncodedUtils.parse(fullPath[1], StandardCharsets.UTF_8);
+        return queryParams;
+    }
+
+
+    public static Map<String, List<PartImplFileItem>> parseBodyWithFiles(RequestContext requestContext) {
+        FileUploadImpl fileUpload = new FileUploadImpl();
+        Map<String, List<PartImplFileItem>> parts = new HashMap<>();
+        try {
+            FileItemIterator iterStream = fileUpload.getItemIterator(requestContext);
+            while (iterStream.hasNext()) {
+                FileItemStream item = iterStream.next();
+                String name = item.getFieldName();
+                InputStream stream = item.openStream();
+                PartImplFileItem part;
+                if (!item.isFormField()) {
+                    byte[] content = stream.readAllBytes();
+                    part = new PartImplFileItem(content, false);
+                } else {
+                    String value = Streams.asString(stream);
+                    part = new PartImplFileItem(value.getBytes(), true);
+                }
+                List<PartImplFileItem> listParts = parts
+                        .computeIfAbsent(name, k -> new ArrayList<>());
+                listParts.add(part);
+            }
+        } catch (FileUploadException | IOException e) {
+            e.printStackTrace();
+
+        }
+//            }
+        return parts;
+    }
+
 
     private static Optional<String> extractHeader(List<String> headers, String header) {
         return headers.stream()
@@ -112,7 +175,7 @@ public class Request {
         return fullPath;
     }
 
-    private List<NameValuePair> getParam(String name, List<NameValuePair> queryParams) {
+    private List<NameValuePair> getValueParamByName(String name, List<NameValuePair> queryParams) {
         List<NameValuePair> list = new ArrayList<>();
         for (NameValuePair nameValue : queryParams) {
             if (name.equals(nameValue.getName())) {
@@ -127,19 +190,55 @@ public class Request {
     }
 
     public List<NameValuePair> getPostParams() {
-        return postParams;
+        return bodyParams;
     }
 
     public List<NameValuePair> getQueryParam(String name) {
-        return getParam(name, queryParams);
+        return getValueParamByName(name, queryParams);
     }
 
     public List<NameValuePair> getPostParam(String name) {
-        return getParam(name, postParams);
+        return getValueParamByName(name, bodyParams);
+    }
+
+    public List<PartImplFileItem> getPart(String name) {
+        return Collections.unmodifiableList((multiParts.getOrDefault("name", new ArrayList<>())));
+    }
+
+    public Map<String, List<PartImplFileItem>> getParts() {
+        return Collections.unmodifiableMap(multiParts);
     }
 
     public List<NameValuePair> getBody() {
-        return body;
+        return bodyParams;
+    }
+
+    @Override
+    public String getCharacterEncoding() {
+        if (this.getContentType() == null) {
+            return null;
+        } else {
+            return Arrays.stream(this.getContentType().split(";"))
+                    .filter(o -> o.startsWith("charset"))
+                    .map(o -> o.substring(o.indexOf("=")))
+                    .findFirst()
+                    .orElse(null);
+        }
+    }
+
+    @Override
+    public String getContentType() {
+        return null;
+    }
+
+    @Override
+    public int getContentLength() {
+        return 0;
+    }
+
+    @Override
+    public InputStream getInputStream() {
+        return null;
     }
 
     @Override
@@ -151,5 +250,10 @@ public class Request {
                 ", headers=" + headers +
                 ", queryParams='" + body + '\'' +
                 '}';
+    }
+
+    @Override
+    public long contentLength() {
+        return 0;
     }
 }
