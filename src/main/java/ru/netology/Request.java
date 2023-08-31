@@ -22,11 +22,11 @@ public class Request implements UploadContext {
     private static final List<String> allowedMethods = List.of(GET, POST);
     private static List<NameValuePair> queryParams = new ArrayList<>();
     private static List<NameValuePair> bodyParams = new ArrayList<>();
-    private static Map<String, List<PartImplFileItem>> multiParts = new HashMap<>();
+    private static Map<String, List<Part>> multiParts = new HashMap<>();
     private static String[] fullPath = new String[2];
 
     public Request(RequestLine requestLine, List<String> headers, List<NameValuePair> queryParams,
-                   List<NameValuePair> bodyParams, Map<String, List<PartImplFileItem>> multiParts) {
+                   List<NameValuePair> bodyParams, Map<String, List<Part>> multiParts) {
         this.requestLine = requestLine;
         this.headers = headers;
         this.query = queryParams;
@@ -101,8 +101,7 @@ public class Request implements UploadContext {
                         bodyParams = URLEncodedUtils.parse(bodyWithParams, StandardCharsets.UTF_8);
                         return new Request(lineOfRequest, headers, queryParams, bodyParams);
                     } else if (contentType.get().startsWith("multipart/form-data")) {
-                        RequestContext requestContext = new RequestContextImpl(new RequestImplHttpRequest(),
-                                contentType.get(), length, in);
+                        RequestContext requestContext = new RequestContextImpl(length, StandardCharsets.UTF_8, contentType.get(), in);
                         multiParts = parseBodyWithFiles(requestContext);
                         return new Request(lineOfRequest, headers, queryParams, null, multiParts);
                     }
@@ -120,24 +119,24 @@ public class Request implements UploadContext {
     }
 
 
-    public static Map<String, List<PartImplFileItem>> parseBodyWithFiles(RequestContext requestContext) {
+    public static Map<String, List<Part>> parseBodyWithFiles(RequestContext requestContext) {
         FileUploadImpl fileUpload = new FileUploadImpl();
-        Map<String, List<PartImplFileItem>> parts = new HashMap<>();
+        Map<String, List<Part>> parts = new HashMap<>();
         try {
             FileItemIterator iterStream = fileUpload.getItemIterator(requestContext);
             while (iterStream.hasNext()) {
                 FileItemStream item = iterStream.next();
                 String name = item.getFieldName();
                 InputStream stream = item.openStream();
-                PartImplFileItem part;
+                Part part;
                 if (!item.isFormField()) {
                     byte[] content = stream.readAllBytes();
-                    part = new PartImplFileItem(content, false);
+                    part = new Part(false, content);
                 } else {
                     String value = Streams.asString(stream);
-                    part = new PartImplFileItem(value.getBytes(), true);
+                    part = new Part(true, value.getBytes());
                 }
-                List<PartImplFileItem> listParts = parts
+                List<Part> listParts = parts
                         .computeIfAbsent(name, k -> new ArrayList<>());
                 listParts.add(part);
             }
@@ -201,11 +200,11 @@ public class Request implements UploadContext {
         return getValueParamByName(name, bodyParams);
     }
 
-    public List<PartImplFileItem> getPart(String name) {
+    public List<Part> getPart(String name) {
         return Collections.unmodifiableList((multiParts.getOrDefault("name", new ArrayList<>())));
     }
 
-    public Map<String, List<PartImplFileItem>> getParts() {
+    public Map<String, List<Part>> getParts() {
         return Collections.unmodifiableMap(multiParts);
     }
 

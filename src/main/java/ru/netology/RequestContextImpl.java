@@ -1,44 +1,49 @@
 package ru.netology;
 
-import org.apache.commons.fileupload.RequestContext;
-import org.apache.http.HttpRequest;
+import org.apache.commons.fileupload.UploadContext;
 
+import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.charset.StandardCharsets;
+import java.nio.charset.Charset;
 
-public class RequestContextImpl implements RequestContext {
-    //    private final Request request;
-    private final HttpRequest httpRequest;
+public class RequestContextImpl implements UploadContext {
+    private final long contentLength;
+    private final Charset characterEncoding;
     private final String contentType;
-    private final int contentLength;
-    private final InputStream inputStream;
+    private final BufferedInputStream inputStream;
 
-    public RequestContextImpl(HttpRequest httpRequest, String contentType, int contentLength, InputStream inputStream) {
-        this.httpRequest = httpRequest;
+    public RequestContextImpl(long contentLength, Charset characterEncoding, String contentType, BufferedInputStream inputStream) {
+        this.characterEncoding = characterEncoding;
         this.contentType = contentType;
         this.contentLength = contentLength;
         this.inputStream = inputStream;
     }
 
+    @Override
+    public long contentLength() {
+        return this.getContentLength();
+    }
 
     @Override
     public String getCharacterEncoding() {
-        return StandardCharsets.UTF_8.name();
+        return this.characterEncoding.name();
     }
 
     @Override
     public String getContentType() {
-        return contentType;
+        return this.contentType;
     }
 
     @Override
     public int getContentLength() {
-        return contentLength;
+        return (int) this.contentLength;// TODO если превышение по размерам , тогда использовать лонг
     }
 
     @Override
     public InputStream getInputStream() throws IOException {
-        return inputStream;
+        return this.inputStream;
     }
+    //    private final Request request;
+
 }
