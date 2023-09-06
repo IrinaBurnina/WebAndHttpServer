@@ -42,7 +42,7 @@ public class Request implements UploadContext {
         this(requestLine, headers, queryParams, bodyParams, null);
     }
 
-    public static Request createRequest(BufferedInputStream in) throws IOException {
+    public static Request createRequest(BufferedInputStream in) throws IOException, FileUploadException {
         // лимит на request line + заголовки
         final var limit = 4096;
 
@@ -96,13 +96,28 @@ public class Request implements UploadContext {
                 final var bodyBytes = in.readNBytes(length);
                 bodyWithParams = new String(bodyBytes);
                 queryParams = parseQuery(lineOfRequest);
-                if (contentType != null) {
+                // - cработало
+                if (contentType.isPresent()) {
                     if (contentType.get().startsWith("application/x-www-form-urlencoded")) {
                         bodyParams = URLEncodedUtils.parse(bodyWithParams, StandardCharsets.UTF_8);
+                        //cработало
                         return new Request(lineOfRequest, headers, queryParams, bodyParams);
                     } else if (contentType.get().startsWith("multipart/form-data")) {
+                        System.out.println("рассмотрение ветки мультипарт-запроса\n");
                         RequestContext requestContext = new RequestContextImpl(length, StandardCharsets.UTF_8, contentType.get(), in);
+                        System.out.println("создание реквест контекста ");
+
+//                        FileUploadImpl fileUpload=new FileUploadImpl();
+//                        Map<String,List<FileItem>> fileItems=fileUpload.parseParameterMap(requestContext);
+//                        for (String key:fileItems.keySet()
+//                             ) {
+//                            System.out.println(fileItems.get(key)+" -----  "+fileItems.values());
+//                        }
+//                        System.out.println(fileItems);
+
+
                         multiParts = parseBodyWithFiles(requestContext);
+                        System.out.println("отработал метод parseBodyWithFiles");//не сработало!!!!!
                         return new Request(lineOfRequest, headers, queryParams, null, multiParts);
                     }
                     return new Request(lineOfRequest, headers, queryParams);
@@ -121,10 +136,15 @@ public class Request implements UploadContext {
 
     public static Map<String, List<Part>> parseBodyWithFiles(RequestContext requestContext) {
         FileUploadImpl fileUpload = new FileUploadImpl();
+        System.out.println("fileuload created");//сработало
+
         Map<String, List<Part>> parts = new HashMap<>();
+        System.out.println("map parts created");//сработало
         try {
             FileItemIterator iterStream = fileUpload.getItemIterator(requestContext);
+            System.out.println("iterstream created");
             while (iterStream.hasNext()) {
+                System.out.println("cycle hasnext is started");
                 FileItemStream item = iterStream.next();
                 String name = item.getFieldName();
                 InputStream stream = item.openStream();
@@ -141,6 +161,8 @@ public class Request implements UploadContext {
                 listParts.add(part);
             }
         } catch (FileUploadException | IOException e) {
+            System.out.println("fileupload exception");
+            System.out.println(e.getMessage());
             e.printStackTrace();
 
         }

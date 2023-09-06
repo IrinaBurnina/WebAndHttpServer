@@ -1,5 +1,7 @@
 package ru.netology;
 
+import org.apache.commons.fileupload.FileUploadException;
+
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
@@ -27,11 +29,13 @@ public class Server {
                     try {
                         connection(socket);
                     } catch (IOException e) {
+                        System.out.println("Socket closed exception, disconnect");
                         e.printStackTrace();
                     }
                 });
             }
         } catch (IOException e) {
+            System.out.println("Socket closed exception");
             e.printStackTrace();
         }
     }
@@ -44,6 +48,7 @@ public class Server {
     }
 
     public void connection(Socket socket) throws IOException {
+        System.out.println(Thread.currentThread().getName());
         try (final var in = new BufferedInputStream(socket.getInputStream());
              final var out = new BufferedOutputStream(socket.getOutputStream())
         ) {
@@ -57,14 +62,15 @@ public class Server {
                 System.out.println(request.getFullPath()[0] + "?" + request.getFullPath()[1] + "- getfullpath");
                 System.out.println(request.getQueryParams() + "  - getQueryParams");
                 System.out.println(request.getQueryParam("value") + "   - getQueryParam");
-//                System.out.println(request.getPostParam("value") + "  -getPostParam");
-//                System.out.println(request.getPostParams() + " - getPostParams");
+                System.out.println(request.getPostParam("value") + "  -getPostParam");
+                System.out.println(request.getPostParams() + " - getPostParams");
                 System.out.println(request.getPart("value") + "  -getPart");
                 System.out.println(request.getParts() + "  - getParts");
 
             }
-        } catch (
-                IOException e) {
+        } catch (IOException | FileUploadException e) {
+            System.out.println(e.getMessage());
+            System.out.println("Handler exception");
             e.printStackTrace();
         }
 

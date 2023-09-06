@@ -7,12 +7,16 @@ import org.apache.commons.fileupload.FileItemHeaders;
 import java.io.*;
 
 public class PartImplFileItem implements FileItem {
-    byte[] content;
+    String fieldName;
+    String contentType;
     boolean isFormField;
+    String fileName;
 
-    public PartImplFileItem(byte[] content, boolean isFormField) {
-        this.content = content;
+    public PartImplFileItem(String fieldName, String contentType, boolean isFormField, String fileName) {
+        this.fieldName = fieldName;
+        this.contentType = contentType;
         this.isFormField = isFormField;
+        this.fileName = fileName;
     }
 
     @Override
@@ -22,12 +26,12 @@ public class PartImplFileItem implements FileItem {
 
     @Override
     public String getContentType() {
-        return null;
+        return this.contentType;
     }
 
     @Override
     public String getName() {
-        return null;
+        return this.fileName;
     }
 
     @Override
@@ -67,7 +71,7 @@ public class PartImplFileItem implements FileItem {
 
     @Override
     public String getFieldName() {
-        return null;
+        return this.fieldName;
     }
 
     @Override
@@ -77,7 +81,7 @@ public class PartImplFileItem implements FileItem {
 
     @Override
     public boolean isFormField() {
-        return false;
+        return this.isFormField;
     }
 
     @Override
