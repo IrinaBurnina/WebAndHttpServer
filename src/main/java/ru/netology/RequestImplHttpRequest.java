@@ -10,12 +10,12 @@ public class RequestImplHttpRequest implements HttpRequest {
 
     @Override
     public RequestLine getRequestLine() {
-        return Request.requestLine;
+        return null;
     }
 
     @Override
     public ProtocolVersion getProtocolVersion() {
-        return Request.requestLine.getProtocolVersion();
+        return null;
     }
 
     @Override

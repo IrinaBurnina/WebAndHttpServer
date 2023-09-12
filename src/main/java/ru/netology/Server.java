@@ -1,12 +1,11 @@
 package ru.netology;
 
-import org.apache.commons.fileupload.FileUploadException;
-
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.IOException;
-import java.net.*;
-import java.util.*;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -22,18 +21,18 @@ public class Server {
     }
 
     public void startServer(int port) {
+        System.out.println("Server is starting...");
         try (final var serverSocket = new ServerSocket(port)) {
-            while (!serverSocket.isClosed()) {
+            do {
                 final var socket = serverSocket.accept();
                 executorService.submit(() -> {
                     try {
                         connection(socket);
-                    } catch (IOException e) {
-                        System.out.println("Socket closed exception, disconnect");
-                        e.printStackTrace();
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
                     }
                 });
-            }
+            } while (true);
         } catch (IOException e) {
             System.out.println("Socket closed exception");
             e.printStackTrace();
@@ -47,7 +46,7 @@ public class Server {
         System.out.println("Метод обработки " + method + " добавлен.");
     }
 
-    public void connection(Socket socket) throws IOException {
+    public void connection(Socket socket) throws Exception {
         System.out.println(Thread.currentThread().getName());
         try (final var in = new BufferedInputStream(socket.getInputStream());
              final var out = new BufferedOutputStream(socket.getOutputStream())
@@ -55,7 +54,7 @@ public class Server {
             Request request = Request.createRequest(in);
             if (request == null) {
                 badRequest(out);
-            } else if (!handlers.containsKey(request.requestLine.getMethod())) {
+            } else if (!handlers.containsKey(request.getRequestLine().getMethod())) {
                 resourceNotFound(out);
             } else {
                 handlersRun(out, request);
@@ -68,7 +67,8 @@ public class Server {
                 System.out.println(request.getParts() + "  - getParts");
 
             }
-        } catch (IOException | FileUploadException e) {
+        } catch (Exception e) {
+//        (IOException| FileUploadException e) {
             System.out.println(e.getMessage());
             System.out.println("Handler exception");
             e.printStackTrace();
@@ -77,7 +77,7 @@ public class Server {
     }
 
     public void handlersRun(BufferedOutputStream out, Request request) throws IOException {
-        Map<String, Handler> map = handlers.get(request.requestLine.getMethod());
+        Map<String, Handler> map = handlers.get(request.getRequestLine().getMethod());
         String requestPath = request.getFullPath()[0];
         for (String path : map.keySet()) {
             if (requestPath.contains(path)) {

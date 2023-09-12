@@ -11,12 +11,13 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
-public class Request implements UploadContext {
-    protected static RequestLine requestLine;
+public class Request implements UploadContext, RequestContext {
+    //public static org.apache.http.RequestLine requestLine;
+    private final RequestLine requestLine;
     private final List<String> headers;
     private final List<NameValuePair> body;
     private final List<NameValuePair> query;
-    //    private static BufferedInputStream in;
+    private final BufferedInputStream in;
     private static final String GET = "GET";
     private static final String POST = "POST";
     private static final List<String> allowedMethods = List.of(GET, POST);
@@ -26,20 +27,29 @@ public class Request implements UploadContext {
     private static String[] fullPath = new String[2];
 
     public Request(RequestLine requestLine, List<String> headers, List<NameValuePair> queryParams,
-                   List<NameValuePair> bodyParams, Map<String, List<Part>> multiParts) {
+                   List<NameValuePair> bodyParams, BufferedInputStream in, Map<String, List<Part>> multiParts) {
         this.requestLine = requestLine;
         this.headers = headers;
         this.query = queryParams;
         this.body = bodyParams;
+        this.in = in;
         this.multiParts = multiParts;
     }
 
-    public Request(RequestLine requestLine, List<String> headers, List<NameValuePair> queryParams) {
-        this(requestLine, headers, queryParams, null, null);
+    public RequestLine getRequestLine() {
+        return this.requestLine;
     }
 
-    public Request(RequestLine requestLine, List<String> headers, List<NameValuePair> queryParams, List<NameValuePair> bodyParams) {
-        this(requestLine, headers, queryParams, bodyParams, null);
+    public List<String> getHeaders() {
+        return headers;
+    }
+
+    public Request(RequestLine requestLine, List<String> headers, List<NameValuePair> queryParams, BufferedInputStream in) {
+        this(requestLine, headers, queryParams, null, in, null);
+    }
+
+    public Request(RequestLine requestLine, List<String> headers, List<NameValuePair> queryParams, List<NameValuePair> bodyParams, BufferedInputStream in) {
+        this(requestLine, headers, queryParams, bodyParams, in, null);
     }
 
     public static Request createRequest(BufferedInputStream in) throws IOException, FileUploadException {
@@ -90,41 +100,32 @@ public class Request implements UploadContext {
             in.skip(headersDelimiter.length);
 // вычитываем Content-Length, чтобы прочитать body
             final var contentLength = extractHeader(headers, "Content-Length");
-            final var contentType = extractHeader(headers, "Content-Type");
+            final var contentType = extractHeader(headers, "Content-Type").get();
             if (contentLength.isPresent()) { //если тело есть
                 final var length = Integer.parseInt(contentLength.get());
                 final var bodyBytes = in.readNBytes(length);
                 bodyWithParams = new String(bodyBytes);
                 queryParams = parseQuery(lineOfRequest);
                 // - cработало
-                if (contentType.isPresent()) {
-                    if (contentType.get().startsWith("application/x-www-form-urlencoded")) {
+                if (contentType != null) {
+                    if (contentType.startsWith("application/x-www-form-urlencoded")) {
                         bodyParams = URLEncodedUtils.parse(bodyWithParams, StandardCharsets.UTF_8);
                         //cработало
-                        return new Request(lineOfRequest, headers, queryParams, bodyParams);
-                    } else if (contentType.get().startsWith("multipart/form-data")) {
+                        return new Request(lineOfRequest, headers, queryParams, bodyParams, in);
+                    } else if (contentType.startsWith("multipart/form-data")) {
                         System.out.println("рассмотрение ветки мультипарт-запроса\n");
-                        RequestContext requestContext = new RequestContextImpl(length, StandardCharsets.UTF_8, contentType.get(), in);
+                        //RequestContext requestContext = new RequestContextImpl(length, StandardCharsets.UTF_8, contentType.get(), in);
                         System.out.println("создание реквест контекста ");
-
-//                        FileUploadImpl fileUpload=new FileUploadImpl();
-//                        Map<String,List<FileItem>> fileItems=fileUpload.parseParameterMap(requestContext);
-//                        for (String key:fileItems.keySet()
-//                             ) {
-//                            System.out.println(fileItems.get(key)+" -----  "+fileItems.values());
-//                        }
-//                        System.out.println(fileItems);
-
-
+                        Request requestContext = new Request(lineOfRequest, headers, queryParams, bodyParams, in);
                         multiParts = parseBodyWithFiles(requestContext);
                         System.out.println("отработал метод parseBodyWithFiles");//не сработало!!!!!
-                        return new Request(lineOfRequest, headers, queryParams, null, multiParts);
+                        return new Request(lineOfRequest, headers, queryParams, null, in, multiParts);
                     }
-                    return new Request(lineOfRequest, headers, queryParams);
+                    return new Request(lineOfRequest, headers, queryParams, in);
                 }
             }
         }
-        return new Request(lineOfRequest, headers, parseQuery(lineOfRequest));
+        return new Request(lineOfRequest, headers, parseQuery(lineOfRequest), in);
     }
 
     private static List<NameValuePair> parseQuery(RequestLine requestLine) {
@@ -134,10 +135,9 @@ public class Request implements UploadContext {
     }
 
 
-    public static Map<String, List<Part>> parseBodyWithFiles(RequestContext requestContext) {
+    public static Map<String, List<Part>> parseBodyWithFiles(Request requestContext) {
         FileUploadImpl fileUpload = new FileUploadImpl();
         System.out.println("fileuload created");//сработало
-
         Map<String, List<Part>> parts = new HashMap<>();
         System.out.println("map parts created");//сработало
         try {
@@ -148,13 +148,16 @@ public class Request implements UploadContext {
                 FileItemStream item = iterStream.next();
                 String name = item.getFieldName();
                 InputStream stream = item.openStream();
+                //PartImplFileItem part;
                 Part part;
                 if (!item.isFormField()) {
                     byte[] content = stream.readAllBytes();
-                    part = new Part(false, content);
+                    part = new Part(item.isFormField(), content);
+                    // part = new PartImplFileItem(name,item.getContentType(),item.isFormField(),item.getName());
                 } else {
                     String value = Streams.asString(stream);
-                    part = new Part(true, value.getBytes());
+                    // part = new PartImplFileItem(name,item.getContentType(),item.isFormField(),item.getName());
+                    part = new Part(item.isFormField(), value);
                 }
                 List<Part> listParts = parts
                         .computeIfAbsent(name, k -> new ArrayList<>());
@@ -247,19 +250,23 @@ public class Request implements UploadContext {
         }
     }
 
+    public String getHeader(String headerName) {
+        return String.valueOf(extractHeader(headers, headerName));
+    }
+
     @Override
     public String getContentType() {
-        return null;
+        return getHeader("Content-Type");
     }
 
     @Override
     public int getContentLength() {
-        return 0;
+        return Integer.parseInt(getHeader("Content-Length"));
     }
 
     @Override
     public InputStream getInputStream() {
-        return null;
+        return in;
     }
 
     @Override

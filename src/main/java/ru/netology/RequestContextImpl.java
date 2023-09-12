@@ -1,5 +1,6 @@
 package ru.netology;
 
+import org.apache.commons.fileupload.RequestContext;
 import org.apache.commons.fileupload.UploadContext;
 
 import java.io.BufferedInputStream;
@@ -7,7 +8,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.Charset;
 
-public class RequestContextImpl implements UploadContext {
+public class RequestContextImpl implements UploadContext, RequestContext {
     private final long contentLength;
     private final Charset characterEncoding;
     private final String contentType;
