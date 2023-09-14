@@ -6,18 +6,11 @@ public class RequestLine implements org.apache.http.RequestLine {
     private String method;
     private String pathToResource;
     private String versionOfProtocol;
-    private ProtocolVersion protocolVersion;
 
     public RequestLine(String method, String pathToResource, String versionOfProtocol) {
         this.method = method;
         this.pathToResource = pathToResource;
         this.versionOfProtocol = versionOfProtocol;
-    }
-
-    public RequestLine(String method, String pathToResource, ProtocolVersion protocolVersion) {
-        this.method = method;
-        this.pathToResource = pathToResource;
-        this.protocolVersion = protocolVersion;
     }
 
     public String getMethod() {
@@ -26,7 +19,7 @@ public class RequestLine implements org.apache.http.RequestLine {
 
     @Override
     public ProtocolVersion getProtocolVersion() {
-        return protocolVersion;
+        return null;
     }
 
     @Override

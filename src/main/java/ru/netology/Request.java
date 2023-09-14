@@ -8,32 +8,36 @@ import org.apache.http.client.utils.URLEncodedUtils;
 import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
-public class Request implements UploadContext, RequestContext {
-    //public static org.apache.http.RequestLine requestLine;
+public class Request implements UploadContext {
     private final RequestLine requestLine;
     private final List<String> headers;
     private final List<NameValuePair> body;
-    private final List<NameValuePair> query;
     private final BufferedInputStream in;
     private static final String GET = "GET";
     private static final String POST = "POST";
     private static final List<String> allowedMethods = List.of(GET, POST);
-    private static List<NameValuePair> queryParams = new ArrayList<>();
-    private static List<NameValuePair> bodyParams = new ArrayList<>();
-    private static Map<String, List<Part>> multiParts = new HashMap<>();
-    private static String[] fullPath = new String[2];
+    private static List<NameValuePair> queryParams = new ArrayList<>();//not static
+    private static List<NameValuePair> bodyParams = new ArrayList<>();//not static
+    private static Map<String, List<Part>> multiParts = new HashMap<>();//not static
+    private static String[] fullPath = new String[2];//not static
 
     public Request(RequestLine requestLine, List<String> headers, List<NameValuePair> queryParams,
                    List<NameValuePair> bodyParams, BufferedInputStream in, Map<String, List<Part>> multiParts) {
         this.requestLine = requestLine;
         this.headers = headers;
-        this.query = queryParams;
+
         this.body = bodyParams;
         this.in = in;
         this.multiParts = multiParts;
+        try {           //чтобы заработало, но так делать не надо, нужно в другое место перед созданием реквеста
+            this.in.reset();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public RequestLine getRequestLine() {
@@ -96,18 +100,22 @@ public class Request implements UploadContext, RequestContext {
 // для GET тела нет
         String bodyWithParams;
         RequestLine lineOfRequest = new RequestLine(requestLine[0], requestLine[1], requestLine[2]);
+        queryParams = parseQuery(lineOfRequest);
         if (!method.equals(GET)) {
             in.skip(headersDelimiter.length);
 // вычитываем Content-Length, чтобы прочитать body
             final var contentLength = extractHeader(headers, "Content-Length");
-            final var contentType = extractHeader(headers, "Content-Type").get();
+            final var contentTypeOptional = extractHeader(headers, "Content-Type");
+
             if (contentLength.isPresent()) { //если тело есть
                 final var length = Integer.parseInt(contentLength.get());
                 final var bodyBytes = in.readNBytes(length);
                 bodyWithParams = new String(bodyBytes);
-                queryParams = parseQuery(lineOfRequest);
-                // - cработало
-                if (contentType != null) {
+                if (contentTypeOptional.isPresent()) {
+                    final var contentType = contentTypeOptional.get();
+
+                    // - cработало
+
                     if (contentType.startsWith("application/x-www-form-urlencoded")) {
                         bodyParams = URLEncodedUtils.parse(bodyWithParams, StandardCharsets.UTF_8);
                         //cработало
@@ -122,6 +130,7 @@ public class Request implements UploadContext, RequestContext {
                         return new Request(lineOfRequest, headers, queryParams, null, in, multiParts);
                     }
                     return new Request(lineOfRequest, headers, queryParams, in);
+
                 }
             }
         }
@@ -130,8 +139,10 @@ public class Request implements UploadContext, RequestContext {
 
     private static List<NameValuePair> parseQuery(RequestLine requestLine) {
         fullPath = requestLine.getPathToResource().split("\\?");
-        queryParams = URLEncodedUtils.parse(fullPath[1], StandardCharsets.UTF_8);
-        return queryParams;
+        if (fullPath.length > 1) {
+            return URLEncodedUtils.parse(fullPath[1], StandardCharsets.UTF_8);
+        }
+        return new ArrayList<>();
     }
 
 
@@ -239,19 +250,12 @@ public class Request implements UploadContext, RequestContext {
 
     @Override
     public String getCharacterEncoding() {
-        if (this.getContentType() == null) {
-            return null;
-        } else {
-            return Arrays.stream(this.getContentType().split(";"))
-                    .filter(o -> o.startsWith("charset"))
-                    .map(o -> o.substring(o.indexOf("=")))
-                    .findFirst()
-                    .orElse(null);
-        }
+        return Charset.defaultCharset().toString();
     }
 
     public String getHeader(String headerName) {
-        return String.valueOf(extractHeader(headers, headerName));
+        var optionalHeader = extractHeader(headers, headerName);
+        return optionalHeader.orElse(null);
     }
 
     @Override
@@ -282,6 +286,6 @@ public class Request implements UploadContext, RequestContext {
 
     @Override
     public long contentLength() {
-        return 0;
+        return getContentLength();
     }
 }

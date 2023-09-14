@@ -12,7 +12,7 @@ public class Main {
         server.addHandler("POST", "/messages", (request, responseStream) -> {
             System.out.println("Hello from POST!");// TODO: handlers code
         });
-        server.startServer(setPort);
+        server.start(setPort);
     }
 }
 
