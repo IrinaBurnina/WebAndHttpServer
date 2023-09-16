@@ -3,9 +3,9 @@ package ru.netology;
 import org.apache.http.ProtocolVersion;
 
 public class RequestLine implements org.apache.http.RequestLine {
-    private String method;
-    private String pathToResource;
-    private String versionOfProtocol;
+    private final String method;
+    private final String pathToResource;
+    private final String versionOfProtocol;
 
     public RequestLine(String method, String pathToResource, String versionOfProtocol) {
         this.method = method;

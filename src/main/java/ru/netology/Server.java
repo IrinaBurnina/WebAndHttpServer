@@ -13,7 +13,7 @@ import java.util.concurrent.Executors;
 public class Server {
 
     private final ExecutorService executorService;
-    private final Map<String, Map<String, Handler>> handlers;
+    private static Map<String, Map<String, Handler>> handlers;
 
     public Server(int poolSize) {
         this.executorService = Executors.newFixedThreadPool(poolSize);
@@ -41,13 +41,20 @@ public class Server {
 
     public void addHandler(String method, String path, Handler handler) {
         Map<String, Handler> map = new ConcurrentHashMap<>();
-        map.put(path, handler);
-        handlers.put(method, map);
-        System.out.println("Метод обработки " + method + " добавлен.");
+        if (handlers.containsKey(method)) {
+            if (handlers.get(method).containsKey(path)) {
+                handlers.get(method)
+                        .replace(path, handler);
+            }
+            handlers.get(method).put(path, handler);
+        } else {
+            map.put(path, handler);
+            handlers.put(method, map);
+        }
+        System.out.println("Метод обработки " + method + "  " + path + " добавлен.");
     }
 
-    public void connection(Socket socket) throws Exception {
-        System.out.println(Thread.currentThread().getName());
+    public void connection(Socket socket) {
         try (final var in = new BufferedInputStream(socket.getInputStream());
              final var out = new BufferedOutputStream(socket.getOutputStream())
         ) {
@@ -56,21 +63,10 @@ public class Server {
                 badRequest(out);
             } else if (!handlers.containsKey(request.getRequestLine().getMethod())) {
                 resourceNotFound(out);
-            } else {
-                handlersRun(out, request);
-                System.out.println(request.getFullPath()[0] + "?" + request.getFullPath()[1] + "- getfullpath");
-                System.out.println(request.getQueryParams() + "  - getQueryParams");
-                System.out.println(request.getQueryParam("value") + "   - getQueryParam");
-                System.out.println(request.getPostParam("value") + "  -getPostParam");
-                System.out.println(request.getPostParams() + " - getPostParams");
-                System.out.println(request.getPart("value") + "  -getPart");
-                System.out.println(request.getParts() + "  - getParts");
-
             }
-        } catch (Exception e) {
-//        (IOException| FileUploadException e) {
+            handlersRun(out, request);
+        } catch (IOException e) {
             System.out.println(e.getMessage());
-            System.out.println("Handler exception");
             e.printStackTrace();
         }
 
@@ -78,16 +74,28 @@ public class Server {
 
     public void handlersRun(BufferedOutputStream out, Request request) throws IOException {
         Map<String, Handler> map = handlers.get(request.getRequestLine().getMethod());
-        String requestPath = request.getFullPath()[0];
+        String requestPath = request.getRequestLine().getPathToResource().split("\\?")[0];
         for (String path : map.keySet()) {
             if (requestPath.contains(path)) {
                 Handler handler = map.get(path);
+                RequestParser requestParser = request.parser(request, (BufferedInputStream) request.getInputStream());
+                requestParser.getPath();
+                System.out.println(requestParser.getQueryParam("value"));
+                requestParser.getQueryParams();
+                System.out.println(requestParser.getPostParam("value"));
+                requestParser.getPostParams();
+                System.out.println(requestParser.getPart("value"));
+                requestParser.getParts();
+                System.out.println(requestParser);
                 handler.handle(request, out);
             }
         }
+        if (!map.containsKey(requestPath)) {
+            System.out.println("Обработка такого пути не зарегистрирована.");
+        }
     }
 
-    private static void badRequest(BufferedOutputStream out) throws IOException {
+    private void badRequest(BufferedOutputStream out) throws IOException {
         out.write((
                 "HTTP/1.1 400 Bad Request\r\n" +
                         "Content-Length: 0\r\n" +
@@ -97,7 +105,7 @@ public class Server {
         out.flush();
     }
 
-    private static void resourceNotFound(BufferedOutputStream out) throws IOException {
+    private void resourceNotFound(BufferedOutputStream out) throws IOException {
         out.write((
                 "HTTP/1.1 404 Resource Not Found\r\n" +
                         "Content-Length: 0\r\n" +
